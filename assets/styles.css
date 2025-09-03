@@ -1,0 +1,80 @@
+/* Glavni naslov (umjesto globalnog h1) */
+.page-title {
+  color: #000000;
+  font-weight: bold;
+  font-size: 30px;
+  margin-top: 20px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #ffffff;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+/* DataTable – dodatni detalji */
+.dash-table-container .row {
+  margin: 0; /* ukloni default margine */
+}
+
+/* === zajedničke postavke za filtere === */
+.filter-bar { display:flex; gap:24px; align-items:flex-end; }
+.filter-item { display:flex; flex-direction:column; min-width:260px; }
+
+.filter-label {
+  font-size: 18px; font-weight: 700; margin-bottom: 6px;
+}
+
+/* === Dropdown (react-select) — 44px, rozi okvir === */
+.my-dropdown .Select-control {
+  min-height: 44px; height: 44px;
+  border: 2px solid #be1e67 !important;
+  border-radius: 6px;
+  box-shadow: none;
+  background-color: #fff;
+}
+.my-dropdown .Select-placeholder,
+.my-dropdown .Select-value-label {
+  font-weight: 700; font-size: 16px; line-height: 40px;
+  color: #000 !important;
+}
+.my-dropdown .is-open > .Select-control {
+  box-shadow: 0 0 0 2px rgba(190,30,103,.15);
+  border-color: #be1e67 !important;
+}
+
+/* === DatePicker — 44px, rozi okvir === */
+.my-dropdown .SingleDatePickerInput__withBorder {
+  border: 2px solid #be1e67 !important;
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 44px;
+  display: flex; align-items: center;
+}
+.my-dropdown .DateInput_input {
+  height: 40px; line-height: 40px;
+  padding: 0 8px;
+  font-weight: 700; font-size: 16px; color: #000;
+  background: #fff;
+}
+
+/* === Checkbox kutija — 44px, rozi okvir kao ostali === */
+.checkbox-box {
+  height: 44px;
+  border: 2px solid #be1e67;
+  border-radius: 6px;
+  padding: 0 12px;
+  display: flex; align-items: center;
+  background: #fff;
+}
+.check-control input[type="checkbox"] {
+  /* malo veći checkbox i roza kvačica (podržano u modernim browserima) */
+  width: 18px; height: 18px;
+  accent-color: #be1e67;
+  margin-right: 8px;
+}
+.check-control label {
+  font-weight: 700; font-size: 16px; color: #000;
+  display: inline-flex; align-items: center; cursor: pointer;
+}
