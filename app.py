@@ -376,7 +376,7 @@ app.layout = html.Div(
                         dcc.Checklist(
                             id="auto-refresh",
                             options=[{"label": " Auto-refresh", "value": "on"}],
-                            value=["on"],                           # uključen po defaultu
+                            value=[],                           # uključen po defaultu
                             className="check-control",
                         ),
                         className="checkbox-box",                  # okvir kao na dropdownu
