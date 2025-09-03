@@ -1,0 +1,4 @@
+dash
+gunicorn
+pandas
+python-tds   # paket se tako zove na pipu, modul je 'pytds'
