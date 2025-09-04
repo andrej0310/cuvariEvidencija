@@ -1,25 +1,23 @@
 # app.py
 import os
+import warnings
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, time as dtime
 
 import pytds
-from pytds.tds_base import TDS74, TDS73, TDS72  # TDS verzije (74 radi kod tebe)
-import dash
-from dash import Dash, dcc, html, dash_table, Input, Output, State
-import warnings
+from pytds.tds_base import TDS74, TDS73, TDS72
 
-import re
-from datetime import datetime, date
+import dash
+from dash import Dash, dcc, html, dash_table, Input, Output
 
 # =========================
-# KONFIG — prilagodi po potrebi ili preko env varijabli
+# KONFIG
 # =========================
 DB_HOST     = os.getenv("DB_HOST")
 DB_PORT     = int(os.getenv("DB_PORT", "1433"))
 DB_NAME     = os.getenv("DB_NAME")
 DB_USER     = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")  # bez defaulta!
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 _env_tds = os.getenv("DB_TDS", "").strip()
 if _env_tds == "74":
@@ -501,9 +499,8 @@ def refresh_logins(_, datum, hhmm, _auto):
     stripes = make_group_stripes(recs)
     return recs, stripes
 
-
 if __name__ == "__main__":
+    import os
     DEBUG = os.getenv("DEBUG", "0") == "1"
     PORT = int(os.getenv("PORT", "8050"))
-    app.run(host="0.0.0.0", port=PORT, debug=DEBUG)
-
+    app.run_server(host="0.0.0.0", port=PORT, debug=DEBUG)
