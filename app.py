@@ -159,11 +159,6 @@ def build_windows_for_time_login(raspored: pd.DataFrame, hhmm: str) -> pd.DataFr
 # =========================
 
 def build_windows_for_time_logout(raspored: pd.DataFrame, hhmm: str, d: date) -> pd.DataFrame:
-    """
-    Za odabrani HH:MM radi prozor [T, T_next), gdje je T_next prvi sljedeći
-    termin tog dana (globalno). Ako ga nema, do kraja dana.
-    Vraća po jedan red za svaku učionicu koja ima termin u T.
-    """
     if raspored is None or raspored.empty:
         return pd.DataFrame(columns=["ucionica","termin","window_start","window_end"])
 
@@ -235,18 +230,25 @@ def sort_rooms_natural(df: pd.DataFrame, col: str = "ucionica", extra_order: lis
     return work
 
 def make_group_stripes(rows: list[dict]) -> list[dict]:
-    if not rows: return []
-    rooms_order, seen = [], set()
+    if not rows:
+        return []
+
+    rooms_order = []
     for r in rows:
-        rm = r.get("ucionica")
-        if rm and rm not in seen:
-            seen.add(rm); rooms_order.append(rm)
+        room = r.get("ucionica")
+        if room and room not in rooms_order:
+            rooms_order.append(room)
+
     colors = ["#F6FAFF", "#FFF8F2"]
     styles = []
     for i, room in enumerate(rooms_order):
+        color = colors[i % 2]
+        # ✨ pre-escape izvan f-stringa (dopušteno)
+        room_escaped = str(room).replace('"', '\\"')
+
         styles.append({
-            "if": {"filter_query": f'{{ucionica}} = "{str(room).replace("\"","\\\"")}"'},
-            "backgroundColor": colors[i % 2],
+            "if": {"filter_query": f'{{ucionica}} = "{room_escaped}"'},
+            "backgroundColor": color,
         })
     return styles
 
