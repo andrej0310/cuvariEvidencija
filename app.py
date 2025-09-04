@@ -21,7 +21,6 @@ DB_NAME     = os.getenv("DB_NAME")
 DB_USER     = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")  # bez defaulta!
 
-# Ako želiš prisiliti TDS kroz ENV: DB_TDS=74/73/72
 _env_tds = os.getenv("DB_TDS", "").strip()
 if _env_tds == "74":
     PREFERRED_TDS = TDS74
@@ -30,7 +29,7 @@ elif _env_tds == "73":
 elif _env_tds == "72":
     PREFERRED_TDS = TDS72
 else:
-    PREFERRED_TDS = TDS74  # po defaultu stavljam 7.4 jer ti radi
+    PREFERRED_TDS = TDS74
 
 warnings.filterwarnings(
     "ignore",
@@ -38,14 +37,13 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-# Debug info
+# window za PRIJAVE (dolazak)
+WINDOW_BEFORE_MIN = 60   # min prije termina
+WINDOW_AFTER_MIN  = 30   # min poslije termina
+
+# debug info
 brojac = 0
 LAST_DB_ERROR = ""
-
-# Window oko termina
-WINDOW_BEFORE_MIN = 60   # koliko minuta prije termina
-WINDOW_AFTER_MIN  = 30   # koliko minuta poslije termina
-
 
 # =========================
 # DB helper
