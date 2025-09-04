@@ -19,7 +19,7 @@
 }
 
 /* === zajedničke postavke za filtere === */
-.filter-bar { display:flex; gap:24px; align-items:flex-end; }
+.filter-bar { display:flex; gap:24px; align-items:flex-end;flex-direction: row;justify-content: center; }
 .filter-item { display:flex; flex-direction:column; min-width:260px; }
 
 .filter-label {
@@ -77,4 +77,35 @@
 .check-control label {
   font-weight: 700; font-size: 16px; color: #000;
   display: inline-flex; align-items: center; cursor: pointer;
+}
+
+/* Kartice za dvije tablice jedna do druge */
+.tables-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+@media (max-width: 980px) {
+  .tables-row { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 2px rgba(16,24,40,0.06);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
 }
