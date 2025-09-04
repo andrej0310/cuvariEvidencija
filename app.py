@@ -21,7 +21,6 @@ DB_NAME     = os.getenv("DB_NAME")
 DB_USER     = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")  # bez defaulta!
 
-# Ako želiš prisiliti TDS kroz ENV: DB_TDS=74/73/72
 _env_tds = os.getenv("DB_TDS", "").strip()
 if _env_tds == "74":
     PREFERRED_TDS = TDS74
@@ -30,7 +29,7 @@ elif _env_tds == "73":
 elif _env_tds == "72":
     PREFERRED_TDS = TDS72
 else:
-    PREFERRED_TDS = TDS74  # po defaultu stavljam 7.4 jer ti radi
+    PREFERRED_TDS = TDS74
 
 warnings.filterwarnings(
     "ignore",
@@ -38,14 +37,13 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-# Debug info
+# window za PRIJAVE (dolazak)
+WINDOW_BEFORE_MIN = 60   # min prije termina
+WINDOW_AFTER_MIN  = 30   # min poslije termina
+
+# debug info
 brojac = 0
 LAST_DB_ERROR = ""
-
-# Window oko termina
-WINDOW_BEFORE_MIN = 60   # koliko minuta prije termina
-WINDOW_AFTER_MIN  = 30   # koliko minuta poslije termina
-
 
 # =========================
 # DB helper
@@ -163,44 +161,10 @@ def build_windows_for_time_login(raspored: pd.DataFrame, hhmm: str) -> pd.DataFr
 # =========================
 
 def build_windows_for_time_logout(raspored: pd.DataFrame, hhmm: str, d: date) -> pd.DataFrame:
-    """
-    Za odabrani HH:MM radi prozor [T, T_next), gdje je T_next prvi sljedeći
-    termin tog dana (globalno). Ako ga nema, do kraja dana.
-    Vraća po jedan red za svaku učionicu koja ima termin u T.
-    """
-    if raspored is None or raspored.empty:
-        return pd.DataFrame(columns=["ucionica","termin","window_start","window_end"])
 
-    r = raspored.copy()
-    r["termin"] = pd.to_datetime(r["termin"])
-
-    # svi termini tog sata (može ih biti više po učionici)
-    r_sel = r[r["termin"].dt.strftime("%H:%M") == hhmm].copy()
-    if r_sel.empty:
-        return pd.DataFrame(columns=["ucionica","termin","window_start","window_end"])
-
-    # početak T je najraniji termin s tim HH:MM (ako su sekunde različite)
-    start_ts = r_sel["termin"].min()
-
-    # globalni sljedeći termin u danu
-    all_times = sorted(r["termin"].unique().tolist())
-    next_ts = next((t for t in all_times if t > start_ts), None)
-
-    day_end = datetime.combine(d, dtime(23, 59, 59))
-    end_ts = next_ts if next_ts is not None else day_end
-
-    rooms = r_sel[["ucionica"]].drop_duplicates().copy()
-    rooms["termin"] = start_ts
-    rooms["window_start"] = start_ts
-    rooms["window_end"] = end_ts
-    return rooms[["ucionica","termin","window_start","window_end"]]
-
-
-def assign_logs_to_windows(log_df: pd.DataFrame, windows: pd.DataFrame, kartice: pd.DataFrame) -> pd.DataFrame:
-    """
     Spajanje po učionici + vremenskom prozoru. Radi i za prijave i za odjave.
     Vraća: ucionica, vrijeme, broj_kartice, cuvar, termin
-    """
+  
     if log_df is None or log_df.empty or windows is None or windows.empty:
         return pd.DataFrame(columns=["ucionica","vrijeme","broj_kartice","cuvar","termin"])
 
@@ -527,66 +491,6 @@ def refresh_logins(_, datum, hhmm, _auto):
     out_df = sort_rooms_natural(
         merged[["ucionica","vrijeme_prijave","broj_kartice","cuvar"]],
         col="ucionica", extra_order=["vrijeme_prijave"]
-    )
-    recs = out_df.to_dict("records")
-    return recs, make_group_stripes(recs)
-
-# --- ODJAVE (desna tablica) ---
-@app.callback(
-    Output("tbl-odjave", "data"),
-    Output("tbl-odjave", "style_data_conditional"),
-    Input("timer-out", "n_intervals"),
-    Input("picker-datum", "date"),
-    Input("dropdown-termin", "value"),
-    Input("auto-refresh-out", "value"),
-    prevent_initial_call=False,
-)
-def refresh_logouts(_n, datum, hhmm, _auto):
-    # uvijek vrati 2 vrijednosti (data, style)
-    if not datum or not hhmm:
-        return [], []
-
-    d = pd.to_datetime(datum).date()
-
-    # raspored za dan
-    raspored = fetch_raspored_for_date(d)
-    if raspored is None or raspored.empty:
-        return [], []
-
-    # sve učionice koje imaju termin u odabranom satu (da se prikazuju i bez odjave)
-    rooms = (
-        raspored.assign(termin_hhmm=raspored["termin"].dt.strftime("%H:%M"))
-                .loc[lambda x: x["termin_hhmm"] == hhmm, ["ucionica"]]
-                .drop_duplicates()
-    )
-
-    # prozori za odjave: [T, prvi sljedeći termin u danu), po SVIM učionicama tog termina
-    windows = build_windows_for_time_logout(raspored, hhmm, d)
-
-    # odjave (state = 0) i mapiranje u prozore
-    logouts = fetch_logout_log_for_date(d)
-    kartice = fetch_kartice()
-    assigned = assign_logs_to_windows(logouts, windows, kartice)
-
-    # merge da zadržimo sve učionice; formatiranje vremena
-    if assigned is not None and not assigned.empty:
-        assigned = assigned.copy()
-        assigned["vrijeme"] = pd.to_datetime(assigned["vrijeme"]).dt.strftime("%d.%m.%Y. %H:%M:%S")
-        merged = rooms.merge(
-            assigned.rename(columns={"vrijeme": "vrijeme_odjave"})[
-                ["ucionica", "vrijeme_odjave", "broj_kartice", "cuvar"]
-            ],
-            on="ucionica", how="left",
-        )
-    else:
-        merged = rooms.copy()
-        merged["vrijeme_odjave"] = None
-        merged["broj_kartice"]   = None
-        merged["cuvar"]          = None
-
-    merged[["vrijeme_odjave", "broj_kartice", "cuvar"]] = (
-        merged[["vrijeme_odjave", "broj_kartice", "cuvar"]].fillna("—")
-    )
 
     # prirodni poredak učionica + zebra po učionici
     out_df = sort_rooms_natural(
