@@ -18,12 +18,50 @@
   margin: 0; /* ukloni default margine */
 }
 
+/* Sakrij pagination kontrole DataTable-a (TV mode) 
+.dash-table-container .previous-next-container,
+.dash-table-container .page-size {
+  display: none !important;
+}
+*/
+
 /* === zajedničke postavke za filtere === */
-.filter-bar { display:flex; gap:24px; align-items:flex-end;flex-direction: row;justify-content: center; }
-.filter-item { display:flex; flex-direction:column; min-width:260px; }
+.filter-bar { 
+  display:flex; 
+  gap:24px; 
+  align-items:flex-end;
+  flex-direction: row;
+  justify-content: space-around; 
+  margin: 15px; 
+}
+
+.filter-termini { 
+  display:flex; 
+  gap:24px; 
+  align-items:flex-end;
+  flex-direction: row;
+  justify-content: center; 
+}
+
+.filter-stranica { 
+  display:flex; 
+  gap:24px; 
+  align-items:flex-end;
+  flex-direction:row;
+  justify-content: center; 
+}
+
+.filter-item { 
+  display:flex; 
+  flex-direction:column; 
+  min-width:150px;
+  height: 75px; 
+}
 
 .filter-label {
-  font-size: 18px; font-weight: 700; margin-bottom: 6px;
+  font-size: 18px; 
+  font-weight: 700; 
+  margin-bottom: 6px;
 }
 
 /* === Dropdown (react-select) — 44px, rozi okvir === */
@@ -109,3 +147,15 @@
   font-size: 28px;
   font-weight: 800;
 }
+
+.title-with-badge { display:flex; align-items:center; gap:8px; }
+.badge-auto {
+  background:#be1e67; color:#fff; font-weight:800; font-size:11px;
+  border-radius:999px; padding:2px 8px;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.badge-auto::after {
+  content:""; width:6px; height:6px; border-radius:50%; background:#fff;
+  animation:pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{transform:scale(1);opacity:.9} 50%{transform:scale(1.6);opacity:.5} }
