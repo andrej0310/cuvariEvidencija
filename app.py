@@ -39,6 +39,8 @@ warnings.filterwarnings(
 WINDOW_BEFORE_MIN = 60   # min prije termina
 WINDOW_AFTER_MIN  = 30   # min poslije termina
 
+PAGE_AUTO_IN_BEFORE_MIN = 60  # auto-paging od T-60 do T
+
 # debug info
 brojac = 0
 LAST_DB_ERROR = ""
@@ -159,6 +161,11 @@ def build_windows_for_time_login(raspored: pd.DataFrame, hhmm: str) -> pd.DataFr
 # =========================
 
 def build_windows_for_time_logout(raspored: pd.DataFrame, hhmm: str, d: date) -> pd.DataFrame:
+    """
+    Za odabrani HH:MM radi prozor [T, T_next), gdje je T_next prvi sljedeći
+    termin tog dana (globalno). Ako ga nema, do kraja dana.
+    Vraća po jedan red za svaku učionicu koja ima termin u T.
+    """
     if raspored is None or raspored.empty:
         return pd.DataFrame(columns=["ucionica","termin","window_start","window_end"])
 
@@ -252,15 +259,38 @@ def make_group_stripes(rows: list[dict]) -> list[dict]:
         })
     return styles
 
+
+def _next_page(curr, total):
+    if total <= 1:
+        return 0
+    curr = (curr or 0)
+    return (curr + 1) % total
+
+def initial_date():
+    # md = fetch_min_date_in_raspored()
+    return date.today() # md if md else date.today()
+
+def is_in_login_autopage_window(d: date, hhmm: str) -> bool:
+    try:
+        h, m = map(int, hhmm.split(":"))
+    except Exception:
+        return False
+    T = datetime.combine(d, dtime(h, m))
+    now = datetime.now()  # ako želiš fiksnu TZ: zamijeni s now_local_naive()
+    return (T - timedelta(minutes=PAGE_AUTO_IN_BEFORE_MIN) <= now < T)
+
+def is_selected_today(d_iso: str | None) -> bool:
+    if not d_iso:
+        return False
+    return pd.to_datetime(d_iso).date() == date.today()
+    # Ako želiš striktno po zoni/bazi, zamijeni date.today() s now_local_naive().date()
+
 # =========================
 # DASH APLIKACIJA
 # =========================
 app = Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
-def initial_date():
-    md = fetch_min_date_in_raspored()
-    return md if md else date.today()
 
 # Header
 image_id = "1IVYXW6Ye48OeHt6Xo89gJPp7NRySHwFH"
@@ -288,11 +318,13 @@ app.layout = html.Div(
         ),
 
         # GLAVNI NASLOV
-        html.H1("Evidencija čuvara", className="page-title"),
+        # html.H1("Evidencija čuvara", className="page-title"),
 
         # FILTERI
         html.Div(
             [
+            html.Div(
+                [
                 html.Div(
                     [
                         html.Label("Datum:", className="filter-label"),
@@ -318,6 +350,41 @@ app.layout = html.Div(
                     ],
                     className="filter-item",
                 ),
+                ],
+                className="filter-termini",
+            ),
+            html.Div(
+                [
+                html.Div(
+                    [
+                        html.Label("Redaka po stranici:", className="filter-label"),
+                        dcc.Dropdown(
+                            id="page-size",
+                            options=[{"label": str(n), "value": n} for n in (4, 10, 12, 14, 16, 18)],
+                            value=12, clearable=False, className="my-dropdown",
+                            ),
+                    ],
+                    className="filter-item",
+                ),
+                html.Div(
+                    [
+                        html.Label("Promjena stranice:", className="filter-label"),
+                        dcc.Dropdown(
+                            id="page-interval",
+                            options=[
+                                {"label": "5 s",  "value": 5_000},
+                                {"label": "30 s", "value": 30_000},
+                                {"label": "60 s", "value": 60_000},
+                                {"label": "90 s", "value": 90_000},
+                            ],
+                            value=60_000, clearable=False, className="my-dropdown",
+                        ),
+                    ],
+                    className="filter-item",
+                ),
+                ],
+                className="filter-stranica",
+            ),
             ],
             className="filter-bar",
         ),
@@ -332,14 +399,25 @@ app.layout = html.Div(
                     [
                         html.Div(
                             [
-                                html.H3("Prijave čuvara", className="card-title"),
+                                html.Div(  # lijevi dio: naslov + badge
+                                    [
+                                    html.H3("Prijave čuvara", className="card-title"),
+                                    html.Span("", 
+                                            id="auto-indicator-in",
+                                            className="badge-auto",
+                                            title="Automatsko listanje",
+                                            style={"display": "none"}),
+                                    ],
+                                    className="title-with-badge",
+                                ),
                                 html.Div(
-                                    dcc.Checklist(
-                                        id="auto-refresh-in",
-                                        options=[{"label": " Auto-refresh", "value": "on"}],
-                                        value=[],
-                                        className="check-control",
+                                    html.Span(
+                                        "", id="refresh-indicator-in",
+                                        className="badge-auto",
+                                        title="Auto-refresh",
+                                        style={"display": "none"},
                                     ),
+                                    id="refresh-box-in",
                                     className="checkbox-box",
                                 ),
                             ],
@@ -369,10 +447,12 @@ app.layout = html.Div(
                             },
                             css=[{"selector": ".dash-spreadsheet", "rule": "border-collapse: collapse !important;"}],
                             sort_action="native",
-                            page_action="none",
+                            page_action="native",
                             filter_action="none",
                             style_table={"maxHeight": "70vh", "overflowY": "auto", "borderRadius": "6px"},
                             style_data_conditional=[],
+                            page_current=0,
+                            page_size=12,
                         ),
                     ],
                     className="card",
@@ -383,16 +463,28 @@ app.layout = html.Div(
                     [
                         html.Div(
                             [
-                                html.H3("Odjave čuvara", className="card-title"),
-                                html.Div(
-                                    dcc.Checklist(
-                                        id="auto-refresh-out",
-                                        options=[{"label": " Auto-refresh", "value": "on"}],
-                                        value=[],
-                                        className="check-control",
+                            html.Div(  # naslov + badge
+                                [
+                                    html.H3("Odjave čuvara", className="card-title"),
+                                    html.Span("", 
+                                        id="auto-indicator-out",
+                                        className="badge-auto",
+                                        title="Automatsko listanje",
+                                        style={"display": "none"},
                                     ),
-                                    className="checkbox-box",
+                                ],
+                                className="title-with-badge",
+                            ),   
+                            html.Div(
+                                html.Span(
+                                    "", id="refresh-indicator-out",
+                                    className="badge-auto",
+                                    title="Auto-refresh",
+                                    style={"display": "none"},
                                 ),
+                                id="refresh-box-out",
+                                className="checkbox-box",
+                            ),
                             ],
                             className="card-header",
                         ),
@@ -420,10 +512,12 @@ app.layout = html.Div(
                             },
                             css=[{"selector": ".dash-spreadsheet", "rule": "border-collapse: collapse !important;"}],
                             sort_action="native",
-                            page_action="none",
+                            page_action="native",
                             filter_action="none",
                             style_table={"maxHeight": "70vh", "overflowY": "auto", "borderRadius": "6px"},
                             style_data_conditional=[],
+                            page_current=0,
+                            page_size=12,
                         ),
                     ],
                     className="card",
@@ -435,6 +529,12 @@ app.layout = html.Div(
         # dva odvojena timera
         dcc.Interval(id="timer-in",  interval=60_000, n_intervals=0),
         dcc.Interval(id="timer-out", interval=60_000, n_intervals=0),
+
+        dcc.Interval(id="pager-in",  interval=60_000, n_intervals=0),  
+        dcc.Interval(id="pager-out", interval=60_000, n_intervals=0),
+
+        dcc.Interval(id="pulse",     interval=60_000, n_intervals=0),
+
     ],
     style={"maxWidth": "1200px", "margin": "15px auto", "padding": "0 10px"},
 )
@@ -466,12 +566,42 @@ def update_termini(datum):
     value = "18:30" if "18:30" in times else (times[0] if times else None)
     return options, value
 
-# Toggles
-@app.callback(Output("timer-in", "disabled"),  Input("auto-refresh-in", "value"))
-def toggle_in(v):  return "on" not in (v or [])
+# Auto-refresh
+@app.callback(
+    Output("timer-in",  "disabled"),
+    Output("timer-out", "disabled"),
+    Output("refresh-indicator-in",  "children"),
+    Output("refresh-indicator-in",  "style"),
+    Output("refresh-indicator-out", "children"),
+    Output("refresh-indicator-out", "style"),
+    Output("refresh-box-in",  "style"),   # ružičasti okvir (prijave)
+    Output("refresh-box-out", "style"),   # ružičasti okvir (odjave)
+    Input("picker-datum", "date"),
+    Input("pulse", "n_intervals"),        # ⇦ NOVO: periodična provjera
+)
+def auto_refresh_by_today(d_iso, _pulse):
+    is_today = False
+    if d_iso:
+        is_today = (pd.to_datetime(d_iso).date() == date.today())
 
-@app.callback(Output("timer-out","disabled"),  Input("auto-refresh-out","value"))
-def toggle_out(v): return "on" not in (v or [])
+    # timere palimo samo kad je danas
+    disabled_in  = not is_today
+    disabled_out = not is_today
+
+    # badge tekst + vidljivost
+    text        = "AUTO-REFRESH" if is_today else ""
+    badge_style = {"display": "inline-flex"} if is_today else {"display": "none"}
+
+    # cijeli rozi okvir: prikaži samo kad je danas
+    box_style = {"display": "flex"} if is_today else {"display": "none"}
+
+    return (
+        disabled_in, disabled_out,
+        text, badge_style,
+        text, badge_style,
+        box_style, box_style,
+    )
+
 
 # --- PRIJAVE (lijeva tablica) ---
 @app.callback(
@@ -480,10 +610,9 @@ def toggle_out(v): return "on" not in (v or [])
     Input("timer-in", "n_intervals"),
     Input("picker-datum", "date"),
     Input("dropdown-termin", "value"),
-    Input("auto-refresh-in", "value"),
     prevent_initial_call=False,
 )
-def refresh_logins(_, datum, hhmm, _auto):
+def refresh_logins(_, datum, hhmm):
     if not datum or not hhmm:
         return [], []
     d = pd.to_datetime(datum).date()
@@ -536,10 +665,9 @@ def refresh_logins(_, datum, hhmm, _auto):
     Input("timer-out", "n_intervals"),
     Input("picker-datum", "date"),
     Input("dropdown-termin", "value"),
-    Input("auto-refresh-out", "value"),
     prevent_initial_call=False,
 )
-def refresh_logouts(_n, datum, hhmm, _auto):
+def refresh_logouts(_n, datum, hhmm):
     # uvijek vrati 2 vrijednosti (data, style)
     if not datum or not hhmm:
         return [], []
@@ -594,6 +722,106 @@ def refresh_logouts(_n, datum, hhmm, _auto):
     recs = out_df.to_dict("records")
     stripes = make_group_stripes(recs)
     return recs, stripes
+
+@app.callback(
+    Output("tbl-prijave", "page_current"),
+    Input("pager-in", "n_intervals"),        # tik-tak za paging
+    Input("picker-datum", "date"),           # reset na promjenu filtera
+    Input("dropdown-termin", "value"),
+    Input("page-size", "value"),
+    State("tbl-prijave", "data"),
+    State("tbl-prijave", "page_size"),
+    State("tbl-prijave", "page_current"),
+)
+def rotate_pages_in(_tick, d_iso, hhmm, page_size_ctrl, data, page_size_tbl, curr):
+    ctx = dash.callback_context
+    # reset na prvu stranicu kad korisnik promijeni datum/termin/veličinu stranice
+    if ctx.triggered:
+        src = ctx.triggered[0]["prop_id"].split(".")[0]
+        if src in ("picker-datum", "dropdown-termin", "page-size"):
+            return 0
+
+    # ako nemamo filtere, ili NISMO u [T-60, T) → ne rotiraj (ostavi trenutačnu stranicu)
+    if not d_iso or not hhmm:
+        return curr or 0
+    d = pd.to_datetime(d_iso).date()
+    if not is_in_login_autopage_window(d, hhmm):
+        return curr or 0
+
+    # u prozoru rotiraj
+    n  = len(data or [])
+    ps = page_size_tbl or page_size_ctrl or 12
+    total = max(1, (n + ps - 1) // ps)
+    return _next_page(curr, total)
+
+@app.callback(
+    Output("tbl-odjave", "page_current"),
+    Input("pager-out", "n_intervals"),
+    Input("picker-datum", "date"),
+    Input("dropdown-termin", "value"),
+    Input("page-size", "value"),
+    State("tbl-odjave", "data"),
+    State("tbl-odjave", "page_size"),
+    State("tbl-odjave", "page_current"),
+)
+def rotate_pages_out(_tick, d_iso, hhmm, page_size_ctrl, data, page_size_tbl, curr):
+    ctx = dash.callback_context
+    # reset na promjenu filtera / veličine stranice
+    if ctx.triggered:
+        src = ctx.triggered[0]["prop_id"].split(".")[0]
+        if src in ("picker-datum", "dropdown-termin", "page-size"):
+            return 0
+
+    # auto-rotiraj samo ako je odabran današnji datum
+    if not is_selected_today(d_iso):
+        return curr or 0
+
+    n  = len(data or [])
+    ps = page_size_tbl or page_size_ctrl or 12
+    total = max(1, (n + ps - 1) // ps)
+    return _next_page(curr, total)
+
+@app.callback(
+    Output("tbl-prijave", "page_size"),
+    Output("tbl-odjave", "page_size"),
+    Input("page-size", "value"),
+)
+def set_page_size(n):
+    return int(n or 12), int(n or 12)
+
+@app.callback(
+    Output("pager-in", "interval"),
+    Output("pager-out", "interval"),
+    Input("page-interval", "value"),
+)
+def set_pager_interval(ms):
+    v = int(ms or 8_000)
+    return v, v
+
+@app.callback(
+    Output("auto-indicator-in", "children"),
+    Output("auto-indicator-in", "style"),
+    Input("pager-in", "n_intervals"),
+    Input("picker-datum", "date"),
+    Input("dropdown-termin", "value"),
+)
+def show_auto_badge(_tick, d_iso, hhmm):
+    if not d_iso or not hhmm:
+        return "", {"display": "none"}
+    d = pd.to_datetime(d_iso).date()
+    on = is_in_login_autopage_window(d, hhmm)
+    # tekst "AUTO" + pulsirajuća točkica (definirana u CSS-u ::after)
+    return ("AUTO", {"display": "inline-flex"}) if on else ("", {"display": "none"})
+
+@app.callback(
+    Output("auto-indicator-out", "children"),
+    Output("auto-indicator-out", "style"),
+    Input("pager-out", "n_intervals"),
+    Input("picker-datum", "date"),
+)
+def show_auto_badge_out(_tick, d_iso):
+    on = is_selected_today(d_iso)
+    return ("AUTO", {"display": "inline-flex"}) if on else ("", {"display": "none"})
 
 if __name__ == "__main__":
     import os
