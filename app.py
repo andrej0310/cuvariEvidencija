@@ -2,13 +2,13 @@
 import os
 import warnings
 import pandas as pd
-from datetime import datetime, date, time as dtime
+from datetime import datetime, date, time as dtime, timedelta
 
 import pytds
 from pytds.tds_base import TDS74, TDS73, TDS72
 
 import dash
-from dash import Dash, dcc, html, dash_table, Input, Output
+from dash import Dash, dcc, html, dash_table, Input, Output, State
 
 # =========================
 # KONFIG
